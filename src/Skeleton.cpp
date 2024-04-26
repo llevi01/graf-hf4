@@ -121,6 +121,76 @@ private:
     }
 };
 
+struct Hit {
+    float param;
+    vec3 coord, normalVector;
+    Material* material;
+
+};
+
+struct Ray {
+    vec3 startPoint, direction;
+
+    Ray(vec3 startPoint, vec3 direction) {
+        this->startPoint = startPoint;
+        this->direction = direction;
+    }
+};
+
+class Intersectable {
+protected:
+    Material* material;
+
+public:
+    virtual Hit getIntersection(Ray& ray) = 0;
+};
+
+class Plane : public Intersectable {
+    int height, width, depth;
+    Material *material1, *material2;
+
+public:
+    Plane(int height, int width, int depth, Material *material1, Material *material2) {
+        this->height = height;
+        this->width = width;
+        this->depth = depth;
+        this->material1 = material1;
+        this->material2 = material2;
+    }
+};
+
+class Cylinder : public Intersectable {
+
+};
+
+class Cone : public Intersectable {
+
+};
+
+class Camera {
+    vec3 eye, lookat, right, up;
+public:
+
+
+    void set(vec3 _eye, vec3 _lookat, vec3 vup, float fov) {
+        eye = _eye;
+        lookat = _lookat;
+        vec3 w = eye - lookat;
+        float focus = length(w);
+        right = normalize(cross(vup, w)) * focus * tanf(fov / 2);
+        up = normalize(cross(w, right)) * focus * tanf(fov / 2);
+    }
+
+    Ray getRay(int X, int Y) {
+        vec3 dir = lookat + right * (2.0f * (X + 0.5f) / windowWidth - 1) + up * (2.0f * (Y + 0.5f) / windowHeight - 1) - eye;
+        return {eye, dir};
+    }
+};
+
+class World {
+
+};
+
 // ------- KI KELL TÖRÖLNI -------
 void GLAPIENTRY
 MessageCallback( GLenum source,
