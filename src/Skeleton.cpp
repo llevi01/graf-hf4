@@ -55,11 +55,30 @@ const char * const fragmentSource = R"(
 	}
 )";
 
+// ------- KI KELL TÖRÖLNI -------
+void GLAPIENTRY
+MessageCallback( GLenum source,
+                 GLenum type,
+                 GLuint id,
+                 GLenum severity,
+                 GLsizei length,
+                 const GLchar* message,
+                 const void* userParam )
+{
+    fprintf( stderr, "GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+             ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
+             type, severity, message );
+}
+
 GPUProgram gpuProgram;
 unsigned int vao;
 
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
+
+    // ------- KI KELL TÖRÖLNI -------
+    glEnable              ( GL_DEBUG_OUTPUT );
+    glDebugMessageCallback( MessageCallback, nullptr );
 
 	glGenVertexArrays(1, &vao);	// get 1 vao id
 	glBindVertexArray(vao);		// make it active
