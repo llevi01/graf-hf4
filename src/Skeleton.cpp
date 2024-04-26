@@ -62,7 +62,64 @@ const char * const fragmentSource = R"(
 	}
 )";
 
+vec3 operator/(vec3 lhs, vec3 rhs) {
+    return {lhs.x / rhs.x, lhs.y / rhs.y, lhs.z / rhs.z};
+}
 
+class Material {
+public:
+    Material() {}
+    virtual bool isRough() = 0;
+    virtual bool isReflective() = 0;
+    virtual bool isRefractive() = 0;
+};
+
+class RoughMaterial {
+private:
+    vec3 ka, kd, ks;
+    float shine;
+
+public:
+    RoughMaterial(vec3 ka, vec3 kd, vec3 ks, float shine) {
+        this->ka = ka;
+        this->kd = kd;
+        this->ks = ks;
+        this->shine = shine;
+    }
+
+    bool isRough() { return true; }
+    bool isReflective() { return false; }
+    bool isRefractive() { return false; }
+};
+
+class SmoothMaterial {
+    vec3 n, kappa, f0;
+    bool refractive;
+
+private:
+    SmoothMaterial(vec3 n, vec3 kappa, bool refractive) {
+        this->n = n;
+        this->kappa = kappa;
+        this->refractive = refractive;
+
+        vec3 unitVec = (1, 1, 1);
+        this->f0 = ((n - unitVec) * (n - unitVec) + kappa * kappa) /
+                   ((n + unitVec) * (n + unitVec) + kappa * kappa);
+    }
+
+    bool isRough() { return false; }
+    bool isReflective() { return true; }
+    bool isRefractive() { return this->refractive; }
+
+    vec3 reflect(vec3 direction, vec3 normalVector) {
+        return direction - normalVector * dot(direction, normalVector) * 2;
+    }
+
+    vec3 fresnel(vec3 direction, vec3 normalVector) {
+        vec3 unitVector = (1, 1, 1);
+        return f0 + (unitVector - f0) * powf(1 + dot(direction, normalVector), 5); // TODO ez lehet nem jó
+    }
+};
 
 // ------- KI KELL TÖRÖLNI -------
 void GLAPIENTRY
