@@ -31,15 +31,20 @@
 //=============================================================================================
 #include "framework.h"
 
+GPUProgram gpuProgram;
+
 const char * const vertexSource = R"(
 	#version 330
 	precision highp float;
 
-	uniform mat4 MVP;
-	layout(location = 0) in vec2 vp;
+    layout(location = 0) in vec2 vp;
+    layout(location = 1) in vec2 tp;
+
+    out vec2 texPosition;
 
 	void main() {
-		gl_Position = vec4(vp.x, vp.y, 0, 1) * MVP;
+		gl_Position = vec4(vp.x, vp.y, 0, 1);
+        texPosition = tp;
 	}
 )";
 
@@ -47,13 +52,17 @@ const char * const fragmentSource = R"(
 	#version 330
 	precision highp float;
 	
-	uniform vec3 color;
+	uniform sampler2D textureSampler;
+
+    in vec2 texPosition;
 	out vec4 outColor;
 
 	void main() {
-		outColor = vec4(color, 1);
+		outColor = texture(textureSampler, texPosition);
 	}
 )";
+
+
 
 // ------- KI KELL TÖRÖLNI -------
 void GLAPIENTRY
@@ -70,8 +79,9 @@ MessageCallback( GLenum source,
              type, severity, message );
 }
 
-GPUProgram gpuProgram;
-unsigned int vao;
+unsigned vao, vbos[2];
+
+unsigned int textureId;
 
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
@@ -80,25 +90,34 @@ void onInitialization() {
     glEnable              ( GL_DEBUG_OUTPUT );
     glDebugMessageCallback( MessageCallback, nullptr );
 
-	glGenVertexArrays(1, &vao);	// get 1 vao id
-	glBindVertexArray(vao);		// make it active
+    std::vector<vec2> rectangleCords, textureCoords;
 
-	unsigned int vbo;		// vertex buffer object
-	glGenBuffers(1, &vbo);	// Generate 1 buffer
-	glBindBuffer(GL_ARRAY_BUFFER, vbo);
-	// Geometry with 24 bytes (6 floats or 3 x 2 coordinates)
-	float vertices[] = { -0.8f, -0.8f, -0.6f, 1.0f, 0.8f, -0.2f };
-	glBufferData(GL_ARRAY_BUFFER, 	// Copy to GPU target
-		sizeof(vertices),  // # bytes
-		vertices,	      	// address
-		GL_STATIC_DRAW);	// we do not change later
+    rectangleCords.emplace_back(-1, -1);
+    rectangleCords.emplace_back(-1, 1);
+    rectangleCords.emplace_back(1, 1);
+    rectangleCords.emplace_back(1, -1);
 
-	glEnableVertexAttribArray(0);  // AttribArray 0
-	glVertexAttribPointer(0,       // vbo -> AttribArray 0
-		2, GL_FLOAT, GL_FALSE, // two floats/attrib, not fixed-point
-		0, NULL); 		     // stride, offset: tightly packed
+    textureCoords.emplace_back(0, 0);
+    textureCoords.emplace_back(0, 1);
+    textureCoords.emplace_back(1, 1);
+    textureCoords.emplace_back(1, 0);
 
-	// create program for the GPU
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(2, vbos);
+    glBindVertexArray(vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbos[0]);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * 4, &rectangleCords[0], GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ARRAY_BUFFER, vbos[1]);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * 4, &textureCoords[0], GL_STATIC_DRAW);
+
+	glGenTextures(1, &textureId);
+
 	gpuProgram.create(vertexSource, fragmentSource, "outColor");
 }
 
@@ -106,22 +125,26 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);     // background color
 	glClear(GL_COLOR_BUFFER_BIT); // clear frame buffer
 
-	// Set color to (0, 1, 0) = green
-	int location = glGetUniformLocation(gpuProgram.getId(), "color");
-	glUniform3f(location, 0.0f, 1.0f, 0.0f); // 3 floats
+    // TODO std::vector<vec4> texture = scene.draw();
+    std::vector<vec4> texture;
+    for (int i = 0; i < windowWidth * windowHeight; ++i) {
+        texture.emplace_back(1, 0, 0, 1);
+    }
 
-	float MVPtransf[4][4] = { 1, 0, 0, 0,    // MVP matrix, 
-							  0, 1, 0, 0,    // row-major!
-							  0, 0, 1, 0,
-							  0, 0, 0, 1 };
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, textureId);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, windowWidth, windowHeight, 0, GL_RGBA, GL_FLOAT, &texture[0]);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	location = glGetUniformLocation(gpuProgram.getId(), "MVP");	// Get the GPU location of uniform variable MVP
-	glUniformMatrix4fv(location, 1, GL_TRUE, &MVPtransf[0][0]);	// Load a 4x4 row-major float matrix to the specified location
+    int samplerLocation = glGetUniformLocation(gpuProgram.getId(), "textureSampler");
+    glUniform1i(samplerLocation, 0);
 
-	glBindVertexArray(vao);  // Draw call
-	glDrawArrays(GL_TRIANGLES, 0 /*startIdx*/, 3 /*# Elements*/);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbos[0]);
+    glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
 
-	glutSwapBuffers(); // exchange buffers for double buffering
+	glutSwapBuffers();
 }
 
 // Key of ASCII code pressed
